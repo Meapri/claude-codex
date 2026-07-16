@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-codex"
+version = "0.1.0"
+description = "Independent Codex plugin and MCP tools for Claude Codex."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Park Chanwoo" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.12"]
+
+[project.scripts]
+claude_codex_mcp = "claude_codex.mcp_server:serve"
+claude_codex_consent = "claude_codex.consent_cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-markers"
+
+[tool.setuptools.packages.find]
+include = ["claude_codex*"]
+exclude = ["skills*", "tests*", "docs*", "scripts*"]
