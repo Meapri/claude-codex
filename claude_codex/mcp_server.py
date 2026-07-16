@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any, Callable, Dict, List
 
-from . import __version__, auth, chat, models, response, security
+from . import __version__, auth, chat, models, response, security, subscription_auth
 
 SERVER_NAME = "claude-codex"
 SERVER_VERSION = __version__
@@ -76,13 +76,29 @@ def tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "claude_codex_chat",
-            "description": "Send a chat request to anthropic. Requires consent + API key.",
+            "description": "Chat via Anthropic Messages. Prefers Claude subscription OAuth (Claude Code login) with plan-lane fingerprint; falls back to API key.",
             "inputSchema": CHAT_SCHEMA,
         },
         {
             "name": "claude_codex_list_models",
             "description": "List curated (and optionally live) models.",
             "inputSchema": LIST_MODELS_SCHEMA,
+        },
+
+        {
+            "name": "claude_codex_login_status",
+            "description": "Claude Code / subscription OAuth credential status (no secrets).",
+            "inputSchema": _empty_schema(),
+        },
+        {
+            "name": "claude_codex_login_refresh",
+            "description": "Refresh Claude Code OAuth access token using stored refresh token.",
+            "inputSchema": _empty_schema(),
+        },
+        {
+            "name": "claude_codex_mirror_keychain",
+            "description": "macOS: copy Claude Code Keychain credentials into ~/.claude/.credentials.json.",
+            "inputSchema": _empty_schema(),
         },
         {
             "name": "claude_codex_doctor",
@@ -127,6 +143,30 @@ def _doctor(_args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+
+
+def _login_status(_args):
+    st = subscription_auth.status()
+    return {"text": json.dumps(st, indent=2), **st, **response.standard_fields(provider="anthropic", backend="subscription-oauth", success=bool(st.get("logged_in")))}
+
+
+def _login_refresh(_args):
+    security.require_consent()
+    creds = subscription_auth.read_credentials()
+    if not creds or not creds.get("refreshToken"):
+        raise RuntimeError("No refresh token. Run: claude auth login --claudeai")
+    refreshed = subscription_auth.refresh_token_pure(creds["refreshToken"])
+    subscription_auth.write_credentials(
+        refreshed["access_token"], refreshed["refresh_token"], refreshed["expires_at_ms"]
+    )
+    out = {"success": True, "expires_at_ms": refreshed["expires_at_ms"]}
+    return {"text": json.dumps(out, indent=2), **out, **response.standard_fields(provider="anthropic", backend="subscription-oauth")}
+
+
+def _mirror_keychain(_args):
+    out = subscription_auth.mirror_keychain_to_file()
+    return {"text": json.dumps(out, indent=2), **out, **response.standard_fields(success=bool(out.get("success")), provider="anthropic", backend="subscription-oauth")}
+
 def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     table: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
         "claude_codex_consent_status": lambda a: {
@@ -136,6 +176,9 @@ def dispatch_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         "claude_codex_provider_status": _provider_status,
         "claude_codex_chat": chat.run_chat,
         "claude_codex_list_models": models.list_models,
+        "claude_codex_login_status": _login_status,
+        "claude_codex_login_refresh": _login_refresh,
+        "claude_codex_mirror_keychain": _mirror_keychain,
         "claude_codex_doctor": _doctor,
     }
     if name not in table:

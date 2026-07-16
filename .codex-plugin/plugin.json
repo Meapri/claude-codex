@@ -1,6 +1,6 @@
 {
   "name": "claude-codex",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Codex skills and MCP tools for Claude Codex: API-key auth, chat, models, diagnostics.",
   "author": {
     "name": "Park Chanwoo",

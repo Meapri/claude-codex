@@ -87,3 +87,34 @@ def test_to_anthropic_system_split():
     )
     assert "be brief" in system
     assert msgs[0]["role"] == "user"
+
+
+def test_subscription_fingerprint_adds_billing_header():
+    from claude_codex import subscription_fingerprint as fp
+
+    body = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 16,
+        "system": "Be brief.",
+        "messages": [{"role": "user", "content": "hello world test"}],
+    }
+    out, headers = fp.apply_subscription_fingerprint(body)
+    assert isinstance(out["system"], list)
+    assert out["system"][0]["text"].startswith("x-anthropic-billing-header:")
+    assert any("Claude Code" in (b.get("text") or "") for b in out["system"] if isinstance(b, dict))
+    assert headers.get("x-stainless-lang") == "js"
+
+
+def test_auth_prefers_subscription_when_token(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLAUDE_CODEX_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("CLAUDE_CODEX_AUTH_MODE", "subscription")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    from claude_codex import auth, subscription_auth
+
+    monkeypatch.setattr(
+        subscription_auth,
+        "resolve_access_token",
+        lambda: {"access_token": "sk-ant-oat-test", "mode": "subscription_oauth", "source": "test"},
+    )
+    ctx = auth.resolve_auth()
+    assert ctx["mode"] == "subscription_oauth"

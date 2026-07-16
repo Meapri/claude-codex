@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import api, models, response, security
+from . import api, auth, models, response, security
 
 DEFAULT_MODEL = models.DEFAULT_MODEL
 
@@ -148,18 +148,30 @@ def run_chat(arguments: Dict[str, Any]) -> Dict[str, Any]:
     if tools:
         body["tools"] = tools
 
+    auth_ctx = auth.resolve_auth()
     payload = api.messages_create(body, timeout=timeout)
     text = extract_text(payload)
     usage = extract_usage(payload)
+    backend = (
+        "anthropic-messages-oauth"
+        if auth_ctx.get("mode") == "subscription_oauth"
+        else "anthropic-messages"
+    )
     return {
         "text": text,
         "stop_reason": payload.get("stop_reason"),
         "raw_id": payload.get("id"),
+        "auth_mode": auth_ctx.get("mode"),
         **response.standard_fields(
             provider="anthropic",
-            backend="anthropic-messages",
+            backend=backend,
             model=str(payload.get("model") or model),
             usage=usage,
-            diagnostics={"api_mode": "anthropic_messages"},
+            diagnostics={
+                "api_mode": "anthropic_messages",
+                "auth_mode": auth_ctx.get("mode"),
+                "auth_source": auth_ctx.get("source"),
+                "subscription_fingerprint": auth_ctx.get("mode") == "subscription_oauth",
+            },
         ),
     }

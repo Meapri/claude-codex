@@ -1,11 +1,13 @@
 # NOTICE
 
-This project is an independent Codex plugin.
+Claude Codex is an independent Codex plugin.
 
-Portions of the **protocol understanding** (Anthropic Messages system/messages split,
-tool `input_schema` shape) were informed by open-source code in:
+## Sources
 
-- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT)
+1. **Anthropic Messages protocol** — ideas from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT).
+2. **Claude subscription plan-lane fingerprint** — adapted from
+   [Meapri/hermes-claude-auth](https://github.com/Meapri/hermes-claude-auth) (MIT),
+   which tracks [griffinmartin/opencode-claude-auth](https://github.com/griffinmartin/opencode-claude-auth).
 
-The implementation here was rewritten for a minimal Codex MCP leaf surface and
-does not copy the Hermes agent runtime.
+Claude Code / Claude.ai subscription credentials are used outside the official
+Claude Code CLI. This may break if Anthropic changes validation. Use at your own risk.

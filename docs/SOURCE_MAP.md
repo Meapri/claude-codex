@@ -1,16 +1,8 @@
-# SOURCE_MAP — Claude Codex ← Hermes
+# SOURCE_MAP — Claude Codex
 
-Independent Codex leaf plugin. Not Hermes. Protocol ideas only.
-
-| Hermes source | This plugin | What was taken |
+| Source | This plugin | Taken |
 | --- | --- | --- |
-| `agent/transports/anthropic.py` | `claude_codex/chat.py` | Messages API as transport; system vs messages split |
-| `agent/anthropic_adapter.py` | `claude_codex/chat.py` | OpenAI→Anthropic message merge; tools → `input_schema` |
-| Provider docs (API key path) | `claude_codex/auth.py` | `ANTHROPIC_API_KEY` first-class auth |
-| — | intentionally omitted | Full AIAgent loop, Claude Code OAuth spoofing, gateway, memory, cron |
-
-## Not ported (on purpose)
-
-- Claude Max OAuth / Claude Code credential store coupling
-- Adaptive thinking / beta header matrix (can be added later)
-- Hermes plugin loader / config.yaml model wizard
+| hermes-agent anthropic transport | `chat.py` | Messages system/messages split, tools input_schema |
+| hermes-agent Claude Code creds | `subscription_auth.py` | Keychain + ~/.claude/.credentials.json, refresh endpoints |
+| Meapri/hermes-claude-auth | `subscription_fingerprint.py` | Billing header, system identity, stainless headers, plan-lane shaping |
+| — | omitted | Hermes AIAgent loop, gateway, sitecustomize monkey-patch installer |

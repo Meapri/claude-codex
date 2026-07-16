@@ -1,12 +1,12 @@
-"""Anthropic API key auth (leaf). OAuth/Claude Code reuse is intentionally out of scope."""
+"""Auth resolution: Claude subscription OAuth first, API key fallback."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from . import paths
+from . import paths, subscription_auth
 
 API_KEY_ENV = "ANTHROPIC_API_KEY"
 API_KEY_FILE = "api-key"
@@ -29,36 +29,87 @@ def get_api_key() -> str:
     return ""
 
 
+def prefer_subscription() -> bool:
+    """Default True: use Claude Code subscription when available."""
+    raw = os.getenv("CLAUDE_CODEX_AUTH_MODE", "subscription").strip().lower()
+    if raw in {"api_key", "key", "apikey"}:
+        return False
+    if raw in {"subscription", "oauth", "claude_code", "auto", ""}:
+        return True
+    return True
+
+
+def resolve_auth() -> Dict[str, Any]:
+    """Return auth context for API calls.
+
+    Keys: mode (subscription_oauth|api_key), access_token or api_key, source
+    """
+    if prefer_subscription():
+        sub = subscription_auth.resolve_access_token()
+        if sub and sub.get("access_token"):
+            return {
+                "mode": "subscription_oauth",
+                "access_token": sub["access_token"],
+                "source": sub.get("source"),
+            }
+    key = get_api_key()
+    if key:
+        # OAuth-shaped keys from env still use Bearer
+        if key.startswith("sk-ant-oat") or key.startswith("sk-ant-ort"):
+            return {"mode": "subscription_oauth", "access_token": key, "source": API_KEY_ENV}
+        return {"mode": "api_key", "api_key": key, "source": API_KEY_ENV if os.getenv(API_KEY_ENV) else str(api_key_path())}
+    # last resort: subscription even if prefer was api_key
+    sub = subscription_auth.resolve_access_token()
+    if sub and sub.get("access_token"):
+        return {
+            "mode": "subscription_oauth",
+            "access_token": sub["access_token"],
+            "source": sub.get("source"),
+        }
+    raise RuntimeError(
+        "No Anthropic credentials. For subscription: run `claude auth login --claudeai` "
+        "(macOS: python3 scripts/claude_codex_login.py mirror-keychain). "
+        f"Or set {API_KEY_ENV}."
+    )
+
+
 def has_credentials() -> bool:
-    return bool(get_api_key())
-
-
-def save_api_key(key: str) -> Path:
-    key = (key or "").strip()
-    if not key:
-        raise ValueError("api key is empty")
-    path = api_key_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(key + "\n", encoding="utf-8")
     try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-    return path
+        resolve_auth()
+        return True
+    except RuntimeError:
+        return False
 
 
 def status() -> Dict[str, Any]:
+    sub = subscription_auth.status()
     key = get_api_key()
-    source = "none"
-    if os.getenv(API_KEY_ENV, "").strip():
-        source = API_KEY_ENV
-    elif api_key_path().is_file() and key:
-        source = str(api_key_path())
+    configured = bool(sub.get("logged_in") or key)
+    active = None
+    try:
+        active = resolve_auth()
+    except RuntimeError:
+        active = None
     return {
-        "text": "Anthropic API key configured." if key else "No Anthropic API key.",
-        "configured": bool(key),
-        "credential_source": source,
+        "text": (
+            f"Auth ready ({active.get('mode')})."
+            if active
+            else "No credentials. Use Claude Code login or ANTHROPIC_API_KEY."
+        ),
+        "configured": configured,
+        "active_mode": (active or {}).get("mode"),
+        "active_source": (active or {}).get("source"),
+        "subscription": sub,
         "api_key_present": bool(key),
-        "api_key_prefix": (key[:7] + "…") if len(key) > 10 else ("set" if key else ""),
-        "hint": f"export {API_KEY_ENV}=sk-ant-... or write {api_key_path()}",
+        "prefer_subscription": prefer_subscription(),
+        "hint": "claude auth login --claudeai  |  CLAUDE_CODEX_AUTH_MODE=subscription|api_key",
     }
+
+
+def logout_local_plugin_key() -> bool:
+    """Remove plugin-local API key file only (does not revoke Claude Code login)."""
+    path = api_key_path()
+    if path.is_file():
+        path.unlink()
+        return True
+    return False
